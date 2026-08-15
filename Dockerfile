@@ -11,6 +11,7 @@ FROM alpine:3.20
 WORKDIR /app
 
 COPY --from=builder /app/app /app/app
+COPY --from=builder /app/templates ./templates
 
 EXPOSE 8080
 
