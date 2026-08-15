@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GraphQL CRUD con Go</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #22c55e;
+        --accent-2: #3b82f6;
+        --danger: #ef4444;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #020817, #0f172a);
+        color: var(--text);
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+      }
+
+      h1 {
+        margin-bottom: 10px;
+        font-size: 2.3rem;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.2fr 2fr;
+        gap: 20px;
+      }
+
+      .panel {
+        background: rgba(17, 24, 39, 0.92);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+      }
+
+      input, textarea, button {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--text);
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        font-size: 1rem;
+      }
+
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: bold;
+        transition: transform 0.1s ease, opacity 0.2s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      .primary {
+        background: var(--accent-2);
+        border-color: transparent;
+      }
+
+      .secondary {
+        background: var(--accent);
+        border-color: transparent;
+      }
+
+      .danger {
+        background: var(--danger);
+        border-color: transparent;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .row > button {
+        flex: 1;
+      }
+
+      .task-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+      }
+
+      .task-item {
+        background: rgba(31, 41, 55, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 12px;
+        padding: 14px 16px;
+      }
+
+      .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.15);
+        color: #86efac;
+      }
+
+      .task-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .task-actions button {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .status {
+        margin-top: 12px;
+        min-height: 22px;
+        color: #cbd5e1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>GraphQL CRUD con Go</h1>
+      <div class="subtitle">Ejemplo usando PostgreSQL y templates nativos de Go.</div>
+
+      <div class="grid">
+        <section class="panel">
+          <h2>Crear o actualizar tarea</h2>
+          <input id="taskId" type="hidden" />
+
+          <label for="title">Título</label>
+          <input id="title" type="text" placeholder="Ej: Revisar documentos" />
+
+          <label for="description">Descripción</label>
+          <textarea id="description" placeholder="Escribe una descripción..."></textarea>
+
+          <label for="done">Completada</label>
+          <input id="done" type="checkbox" style="width: auto; margin-bottom: 16px;" />
+
+          <div class="row">
+            <button class="primary" id="saveTask">Guardar</button>
+            <button class="secondary" id="clearForm">Limpiar</button>
+          </div>
+
+          <div id="status" class="status"></div>
+        </section>
+
+        <section class="panel">
+          <div class="task-header">
+            <h2>Listado de tareas</h2>
+            <button class="secondary" id="loadTasks" style="width: auto; padding: 8px 16px; margin: 0;">Recargar</button>
+          </div>
+          <ul id="taskList" class="task-list"></ul>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const taskList = document.getElementById('taskList');
+      const statusBox = document.getElementById('status');
+      const titleInput = document.getElementById('title');
+      const descriptionInput = document.getElementById('description');
+      const doneInput = document.getElementById('done');
+      const taskIdInput = document.getElementById('taskId');
+
+      const setStatus = (message, isError = false) => {
+        statusBox.textContent = message;
+        statusBox.style.color = isError ? '#fca5a5' : '#cbd5e1';
+      };
+
+      async function gql(query, variables = {}) {
+        const response = await fetch('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, variables })
+        });
+
+        const result = await response.json();
+        if (!response.ok || result.errors) {
+          const message = result.errors ? result.errors.map(e => e.message).join(', ') : 'Error al ejecutar la consulta';
+          throw new Error(message);
+        }
+
+        return result.data;
+      }
+
+      function renderTasks(tasks) {
+        taskList.innerHTML = '';
+
+        if (!tasks.length) {
+          const empty = document.createElement('li');
+          empty.className = 'task-item';
+          empty.innerHTML = '<span class="muted">No hay tareas registradas.</span>';
+          taskList.appendChild(empty);
+          return;
+        }
+
+        tasks.forEach(task => {
+          const item = document.createElement('li');
+          item.className = 'task-item';
+          item.innerHTML = `
+            <div class="task-header">
+              <strong>${task.title}</strong>
+              <span class="badge">${task.done ? 'Completada' : 'Pendiente'}</span>
+            </div>
+            <div class="muted">${task.description || 'Sin descripción'}</div>
+            <div class="task-actions">
+              <button class="secondary" data-action="edit" data-id="${task.id}">Editar</button>
+              <button class="danger" data-action="delete" data-id="${task.id}">Eliminar</button>
+            </div>
+          `;
+          taskList.appendChild(item);
+        });
+
+        document.querySelectorAll('[data-action="edit"]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const id = button.dataset.id;
+            const query = `query GetTask($id: ID!) { task(id: $id) { id title description done } }`;
+            const data = await gql(query, { id });
+            const task = data.task;
+            taskIdInput.value = task.id;
+            titleInput.value = task.title;
+            descriptionInput.value = task.description || '';
+            doneInput.checked = task.done;
+            setStatus('Tarea cargada para edición');
+          });
+        });
+
+        document.querySelectorAll('[data-action="delete"]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const id = button.dataset.id;
+            const mutation = `mutation DeleteTask($id: ID!) { deleteTask(id: $id) }`;
+            await gql(mutation, { id });
+            setStatus('Tarea eliminada correctamente');
+            loadTasks();
+          });
+        });
+      }
+
+      async function loadTasks() {
+        const query = `query { tasks { id title description done } }`;
+        const data = await gql(query);
+        renderTasks(data.tasks);
+      }
+
+      document.getElementById('saveTask').addEventListener('click', async () => {
+        const title = titleInput.value.trim();
+        const description = descriptionInput.value.trim();
+        const done = doneInput.checked;
+
+        if (!title) {
+          setStatus('El título es obligatorio', true);
+          return;
+        }
+
+        if (taskIdInput.value) {
+          const mutation = `mutation UpdateTask($id: ID!, $title: String!, $description: String, $done: Boolean) {
+            updateTask(id: $id, title: $title, description: $description, done: $done) {
+              id title description done
+            }
+          }`;
+
+          await gql(mutation, {
+            id: taskIdInput.value,
+            title,
+            description,
+            done
+          });
+
+          setStatus('Tarea actualizada correctamente');
+        } else {
+          const mutation = `mutation CreateTask($title: String!, $description: String, $done: Boolean) {
+            createTask(title: $title, description: $description, done: $done) {
+              id title description done
+            }
+          }`;
+
+          await gql(mutation, {
+            title,
+            description,
+            done
+          });
+
+          setStatus('Tarea creada correctamente');
+        }
+
+        clearForm();
+        loadTasks();
+      });
+
+      document.getElementById('clearForm').addEventListener('click', clearForm);
+
+      function clearForm() {
+        taskIdInput.value = '';
+        titleInput.value = '';
+        descriptionInput.value = '';
+        doneInput.checked = false;
+      }
+
+      loadTasks().catch(error => {
+        setStatus(error.message, true);
+      });
+    </script>
+  </body>
+</html>
