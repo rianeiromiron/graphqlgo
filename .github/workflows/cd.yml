@@ -37,3 +37,16 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/graphqlgo:latest
+
+      - name: Prepare deployment env
+        run: |
+          echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" > .env
+          echo "DB_HOST=${{ secrets.DB_HOST || 'host.docker.internal' }}" >> .env
+          echo "DB_PORT=${{ secrets.DB_PORT || '5432' }}" >> .env
+          echo "DB_USER=${{ secrets.DB_USER || 'postgres' }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "DB_NAME=${{ secrets.DB_NAME || 'gestion_documentos' }}" >> .env
+          echo "DB_SSLMODE=${{ secrets.DB_SSLMODE || 'disable' }}" >> .env
+
+      - name: Show generated deployment env
+        run: cat .env
