@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 
 	"graphqlexample/internal/db"
 	graphqlserver "graphqlexample/internal/graphql"
@@ -11,12 +13,12 @@ import (
 
 func main() {
 	cfg := db.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "norimorienair4614",
-		DBName:   "gestion_documentos",
-		SSLMode:  "disable",
+		Host:     getEnv("DB_HOST", "localhost"),
+		Port:     getEnvInt("DB_PORT", 5432),
+		User:     getEnv("DB_USER", "postgres"),
+		Password: getEnv("DB_PASSWORD", "norimorienair4614"),
+		DBName:   getEnv("DB_NAME", "gestion_documentos"),
+		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
 
 	conn, err := db.New(cfg)
@@ -33,6 +35,23 @@ func main() {
 	mux.Handle("/", web.NewHandler())
 	mux.Handle("/graphql", graphqlserver.NewHTTPHandler(conn))
 
-	log.Println("GraphQL server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Printf("GraphQL server running at http://0.0.0.0:%s", getEnv("APP_PORT", "8080"))
+	log.Fatal(http.ListenAndServe(":"+getEnv("APP_PORT", "8080"), mux))
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }
