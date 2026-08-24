@@ -27,8 +27,12 @@ func main() {
 	}
 	defer conn.Close()
 
-	if err := db.Migrate(conn); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+	if getEnvBool("RUN_MIGRATIONS", true) {
+		if err := db.Migrate(conn); err != nil {
+			log.Fatalf("failed to migrate database: %v", err)
+		}
+	} else {
+		log.Println("skipping database migrations (RUN_MIGRATIONS=false)")
 	}
 
 	mux := http.NewServeMux()
@@ -49,6 +53,16 @@ func getEnv(key, fallback string) string {
 func getEnvInt(key string, fallback int) int {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
 		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		parsed, err := strconv.ParseBool(value)
 		if err == nil {
 			return parsed
 		}

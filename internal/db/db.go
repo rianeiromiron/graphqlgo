@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -44,7 +45,24 @@ func New(cfg Config) (*sql.DB, error) {
 	return db, nil
 }
 
+// migrationLockID scopes a Postgres advisory lock so that concurrent
+// replicas migrating at startup serialize instead of racing on DDL.
+const migrationLockID = 918273645
+
 func Migrate(db *sql.DB) error {
+	ctx := context.Background()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationLockID); err != nil {
+		return fmt.Errorf("acquire migration lock: %w", err)
+	}
+	defer conn.ExecContext(ctx, `SELECT pg_advisory_unlock($1)`, migrationLockID)
+
 	query := `
 		CREATE TABLE IF NOT EXISTS tasks (
 			id SERIAL PRIMARY KEY,
@@ -54,7 +72,7 @@ func Migrate(db *sql.DB) error {
 		);
 	`
 
-	if _, err := db.Exec(query); err != nil {
+	if _, err := conn.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("create tasks table: %w", err)
 	}
 
