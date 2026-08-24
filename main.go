@@ -16,7 +16,7 @@ func main() {
 		Host:     getEnv("DB_HOST", "localhost"),
 		Port:     getEnvInt("DB_PORT", 5432),
 		User:     getEnv("DB_USER", "postgres"),
-		Password: getEnv("DB_PASSWORD", "norimorienair4614"),
+		Password: getEnv("DB_PASSWORD", ""),
 		DBName:   getEnv("DB_NAME", "gestion_documentos"),
 		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}

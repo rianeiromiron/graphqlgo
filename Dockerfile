@@ -19,7 +19,6 @@ ENV APP_PORT=8080 \
     DB_HOST=host.docker.internal \
     DB_PORT=5432 \
     DB_USER=postgres \
-    DB_PASSWORD=norimorienair4614 \
     DB_NAME=gestion_documentos \
     DB_SSLMODE=disable
 
